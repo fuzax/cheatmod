@@ -7,6 +7,7 @@
   "itemspawner.category.all": "Tout",
   "itemspawner.category.blocks": "Blocs",
   "itemspawner.category.tools": "Outils",
+  "itemspawner.category.cheat_tools": "Outils cheat",
   "itemspawner.category.food": "Nourriture",
   "itemspawner.category.favorites": "Favoris",
   "itemspawner.quantity": "Quantité : %s",
@@ -22,5 +23,10 @@
   "itemspawner.enchantment.incompatible": "Certains enchantements incompatibles ont été ignorés.",
   "itemspawner.enchantment.max_level": "Max. %s",
   "itemspawner.search.enchantment": "Rechercher un enchantement...",
+  "itemspawner.cheat.pickaxe_efficiency": "Pioche Efficacité 255",
+  "itemspawner.cheat.pickaxe_fortune": "Pioche Fortune 255",
+  "itemspawner.cheat.pickaxe_3x3": "Pioche 3×3 (Efficacité + Fortune 255)",
+  "itemspawner.cheat.sword_sharpness": "Épée Tranchant 255",
+  "itemspawner.cheat.shovel_efficiency": "Pelle Efficacité 255",
   "itemspawner.permission.denied": "Tu n'as pas la permission d'utiliser ce menu sur ce serveur."
 }

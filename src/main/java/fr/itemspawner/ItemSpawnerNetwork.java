@@ -11,6 +11,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.tags.ItemTags;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -24,7 +26,7 @@ import java.util.Map;
 
 @Mod.EventBusSubscriber(modid = ItemSpawner.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ItemSpawnerNetwork {
-    private static final String PROTOCOL_VERSION = "3";
+    private static final String PROTOCOL_VERSION = "4";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ItemSpawner.MOD_ID, "give_item"),
             () -> PROTOCOL_VERSION,
@@ -50,7 +52,7 @@ public class ItemSpawnerNetwork {
             }
 
             MinecraftServer server = player.getServer();
-            if (server == null || (!server.isSingleplayerOwner(player.getGameProfile()) && !player.hasPermissions(2))) {
+            if (server == null || !server.isSingleplayer() || !server.isSingleplayerOwner(player.getGameProfile())) {
                 player.sendSystemMessage(Component.translatable("itemspawner.permission.denied"));
                 return;
             }
@@ -86,11 +88,11 @@ public class ItemSpawnerNetwork {
         context.setPacketHandled(true);
     }
 
-    public static void sendToServer(ResourceLocation itemId, int quantity, Map<ResourceLocation, Integer> enchantments) {
-        INSTANCE.sendToServer(new GiveItemPacket(itemId, quantity, enchantments));
+    public static void sendToServer(ResourceLocation itemId, int quantity, Map<ResourceLocation, Integer> enchantments, boolean mine3x3) {
+        INSTANCE.sendToServer(new GiveItemPacket(itemId, quantity, enchantments, mine3x3));
     }
 
-    public record GiveItemPacket(ResourceLocation itemId, int quantity, Map<ResourceLocation, Integer> enchantments) {
+    public record GiveItemPacket(ResourceLocation itemId, int quantity, Map<ResourceLocation, Integer> enchantments, boolean mine3x3) {
         public void encode(FriendlyByteBuf buffer) {
             buffer.writeResourceLocation(itemId);
             buffer.writeVarInt(quantity);
@@ -104,6 +106,7 @@ public class ItemSpawnerNetwork {
                 buffer.writeResourceLocation(entry.getKey());
                 buffer.writeVarInt(entry.getValue());
             }
+            buffer.writeBoolean(mine3x3);
         }
 
         public static GiveItemPacket decode(FriendlyByteBuf buffer) {
@@ -114,7 +117,7 @@ public class ItemSpawnerNetwork {
             for (int index = 0; index < count; index++) {
                 enchantments.put(buffer.readResourceLocation(), buffer.readVarInt());
             }
-            return new GiveItemPacket(itemId, quantity, enchantments);
+            return new GiveItemPacket(itemId, quantity, enchantments, buffer.readBoolean());
         }
     }
 }

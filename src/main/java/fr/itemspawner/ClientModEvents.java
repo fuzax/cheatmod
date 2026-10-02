@@ -5,13 +5,15 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.glfw.GLFW;
 
 @Mod.EventBusSubscriber(
         modid = ItemSpawner.MOD_ID,
-        bus = Mod.EventBusSubscriber.Bus.MOD
+        bus = Mod.EventBusSubscriber.Bus.MOD,
+        value = Dist.CLIENT
 )
 public class ClientModEvents {
 
@@ -29,7 +31,8 @@ public class ClientModEvents {
 
     @Mod.EventBusSubscriber(
             modid = ItemSpawner.MOD_ID,
-            bus = Mod.EventBusSubscriber.Bus.FORGE
+            bus = Mod.EventBusSubscriber.Bus.FORGE,
+            value = Dist.CLIENT
     )
     public static class ClientForgeEvents {
 
@@ -37,7 +40,7 @@ public class ClientModEvents {
         public static void onKeyInput(InputEvent.Key event) {
             if (OPEN_MENU.consumeClick()) {
                 Minecraft minecraft = Minecraft.getInstance();
-                if (minecraft.player != null && minecraft.screen == null) {
+                if (minecraft.hasSingleplayerServer() && minecraft.player != null && minecraft.screen == null) {
                     minecraft.setScreen(new ItemSpawnerScreen());
                 }
             }

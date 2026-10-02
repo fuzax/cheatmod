@@ -39,6 +39,7 @@ public class ItemSpawnerScreen extends Screen {
     private static final Gson GSON = new Gson();
     private static final Type FAVORITES_TYPE = new TypeToken<Set<String>>() { }.getType();
     private static final Category[] CATEGORIES = Category.values();
+    private static final CheatToolPreset[] CHEAT_TOOL_PRESETS = CheatToolPreset.values();
     private final List<Item> items = StreamSupport.stream(BuiltInRegistries.ITEM.spliterator(), false)
             .filter(item -> item != Items.AIR)
             .sorted(Comparator.comparing(item -> BuiltInRegistries.ITEM.getKey(item).toString()))
@@ -49,6 +50,7 @@ public class ItemSpawnerScreen extends Screen {
     private Category category = Category.ALL;
     private String searchText = "";
     private Item selectedItem;
+    private boolean selectedMine3x3;
     private final Map<Enchantment, Integer> selectedEnchantments = new LinkedHashMap<>();
     private int quantity = 1;
     private int scrollOffset;
@@ -68,8 +70,8 @@ public class ItemSpawnerScreen extends Screen {
         super.init();
         listX = 16;
         listWidth = this.width - 32;
-        listY = 91;
-        listHeight = Math.max(36, this.height - 176);
+        listY = 113;
+        listHeight = Math.max(36, this.height - 198);
 
         EditBox searchBox = new EditBox(this.font, listX, 42, listWidth, 20, Component.translatable("itemspawner.search"));
         searchBox.setMaxLength(100);
@@ -83,20 +85,22 @@ public class ItemSpawnerScreen extends Screen {
 
         int buttonGap = 2;
         int[] categoryButtonWidths = new int[CATEGORIES.length];
-        int totalCategoryWidth = buttonGap * (CATEGORIES.length - 1);
         for (int index = 0; index < CATEGORIES.length; index++) {
             categoryButtonWidths[index] = this.font.width(CATEGORIES[index].label()) + 12;
-            totalCategoryWidth += categoryButtonWidths[index];
         }
-        int extraWidth = Math.max(0, listWidth - totalCategoryWidth) / CATEGORIES.length;
         int buttonX = listX;
+        int buttonY = 66;
         for (int index = 0; index < CATEGORIES.length; index++) {
             Category buttonCategory = CATEGORIES[index];
-            int categoryButtonWidth = categoryButtonWidths[index] + extraWidth;
+            int categoryButtonWidth = Math.min(listWidth, categoryButtonWidths[index]);
+            if (buttonX > listX && buttonX + categoryButtonWidth > listX + listWidth) {
+                buttonX = listX;
+                buttonY += 21;
+            }
             this.addRenderableWidget(Button.builder(buttonCategory.label(), button -> {
                 category = buttonCategory;
                 recalcScroll();
-            }).bounds(buttonX, 66, categoryButtonWidth, 20).build());
+            }).bounds(buttonX, buttonY, categoryButtonWidth, 20).build());
             buttonX += categoryButtonWidth + buttonGap;
         }
 
@@ -159,10 +163,10 @@ public class ItemSpawnerScreen extends Screen {
             selectedEnchantments.forEach((enchantment, level) -> {
                 ResourceLocation enchantmentId = BuiltInRegistries.ENCHANTMENT.getKey(enchantment);
                 if (enchantmentId != null) {
-                    enchantments.put(enchantmentId, Mth.clamp(level, 1, enchantment.getMaxLevel()));
+                    enchantments.put(enchantmentId, Mth.clamp(level, 1, 255));
                 }
             });
-            ItemSpawnerNetwork.sendToServer(itemId, safeQuantity, enchantments);
+            ItemSpawnerNetwork.sendToServer(itemId, safeQuantity, enchantments, selectedMine3x3);
         }
     }
 
@@ -173,8 +177,12 @@ public class ItemSpawnerScreen extends Screen {
                 .filter(item -> matchesSearch(item, query))
                 .toList();
         int visibleEntries = Math.max(1, listHeight / ENTRY_HEIGHT);
-        maxScroll = Math.max(0, filteredItems.size() - visibleEntries);
+        maxScroll = Math.max(0, entryCount() - visibleEntries);
         scrollOffset = Mth.clamp(scrollOffset, 0, maxScroll);
+    }
+
+    private int entryCount() {
+        return category == Category.CHEAT_TOOLS ? CHEAT_TOOL_PRESETS.length : filteredItems.size();
     }
 
     private boolean matchesCategory(Item item) {
@@ -182,6 +190,7 @@ public class ItemSpawnerScreen extends Screen {
             case ALL -> true;
             case BLOCKS -> item instanceof BlockItem;
             case TOOLS -> isTool(item);
+            case CHEAT_TOOLS -> false;
             case FOOD -> new ItemStack(item).isEdible();
             case FAVORITES -> {
                 ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
@@ -228,10 +237,19 @@ public class ItemSpawnerScreen extends Screen {
         guiGraphics.fill(listX, listBottom - 1, listRight, listBottom, 0xFF555555);
 
         guiGraphics.enableScissor(listX, listY, listRight, listBottom);
-        int visibleEntries = Math.min(listHeight / ENTRY_HEIGHT, filteredItems.size() - scrollOffset);
+        int visibleEntries = Math.min(listHeight / ENTRY_HEIGHT, entryCount() - scrollOffset);
         for (int row = 0; row < visibleEntries; row++) {
             int itemIndex = scrollOffset + row;
             int y = listY + row * ENTRY_HEIGHT;
+            if (category == Category.CHEAT_TOOLS) {
+                CheatToolPreset preset = CHEAT_TOOL_PRESETS[itemIndex];
+                if (mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8) {
+                    guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, 0x5533AAFF);
+                }
+                guiGraphics.renderItem(new ItemStack(preset.item), listX + 6, y + 1);
+                guiGraphics.drawString(this.font, Component.translatable(preset.labelKey), listX + 28, y + 5, 0xFFFFFF);
+                continue;
+            }
             Item item = filteredItems.get(itemIndex);
             boolean hovered = mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8;
 
@@ -257,7 +275,7 @@ public class ItemSpawnerScreen extends Screen {
         int scrollbarX = listRight - 6;
         int scrollbarY = listY + 4;
         int scrollbarHeight = Math.max(1, listHeight - 8);
-        int thumbHeight = Math.max(16, (int) ((float) listHeight / Math.max(1, filteredItems.size()) * scrollbarHeight));
+        int thumbHeight = Math.max(16, (int) ((float) listHeight / Math.max(1, entryCount()) * scrollbarHeight));
         thumbHeight = Math.min(thumbHeight, scrollbarHeight);
         int thumbTravel = Math.max(0, scrollbarHeight - thumbHeight);
         int thumbY = scrollbarY + (int) ((float) scrollOffset / Math.max(1, maxScroll) * thumbTravel);
@@ -291,12 +309,17 @@ public class ItemSpawnerScreen extends Screen {
                 return super.mouseClicked(mouseX, mouseY, button);
             }
             int rowIndex = scrollOffset + rowOffset;
+            if (category == Category.CHEAT_TOOLS && rowIndex >= 0 && rowIndex < CHEAT_TOOL_PRESETS.length) {
+                selectCheatTool(CHEAT_TOOL_PRESETS[rowIndex]);
+                return true;
+            }
             if (rowIndex >= 0 && rowIndex < filteredItems.size()) {
                 Item item = filteredItems.get(rowIndex);
                 if (mouseX >= listX + listWidth - 31) {
                     toggleFavorite(item);
                 } else {
                     selectedItem = item;
+                    selectedMine3x3 = false;
                     selectedEnchantments.clear();
                     this.clearWidgets();
                     this.init(this.minecraft, this.width, this.height);
@@ -305,6 +328,20 @@ public class ItemSpawnerScreen extends Screen {
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    private void selectCheatTool(CheatToolPreset preset) {
+        selectedItem = preset.item;
+        selectedMine3x3 = preset.mine3x3;
+        selectedEnchantments.clear();
+        preset.enchantments.forEach((id, level) -> {
+            Enchantment enchantment = BuiltInRegistries.ENCHANTMENT.get(new ResourceLocation(id));
+            if (enchantment != null) {
+                selectedEnchantments.put(enchantment, level);
+            }
+        });
+        this.clearWidgets();
+        this.init(this.minecraft, this.width, this.height);
     }
 
     private void toggleFavorite(Item item) {
@@ -379,6 +416,7 @@ public class ItemSpawnerScreen extends Screen {
         ALL("itemspawner.category.all"),
         BLOCKS("itemspawner.category.blocks"),
         TOOLS("itemspawner.category.tools"),
+        CHEAT_TOOLS("itemspawner.category.cheat_tools"),
         FOOD("itemspawner.category.food"),
         FAVORITES("itemspawner.category.favorites");
 
@@ -390,6 +428,26 @@ public class ItemSpawnerScreen extends Screen {
 
         private Component label() {
             return Component.translatable(translationKey);
+        }
+    }
+
+    private enum CheatToolPreset {
+        PICKAXE_EFFICIENCY("itemspawner.cheat.pickaxe_efficiency", Items.DIAMOND_PICKAXE, false, Map.of("minecraft:efficiency", 255)),
+        PICKAXE_FORTUNE("itemspawner.cheat.pickaxe_fortune", Items.DIAMOND_PICKAXE, false, Map.of("minecraft:fortune", 255)),
+        PICKAXE_3X3("itemspawner.cheat.pickaxe_3x3", Items.DIAMOND_PICKAXE, true, Map.of("minecraft:efficiency", 255, "minecraft:fortune", 255)),
+        SWORD_SHARPNESS("itemspawner.cheat.sword_sharpness", Items.DIAMOND_SWORD, false, Map.of("minecraft:sharpness", 255)),
+        SHOVEL_EFFICIENCY("itemspawner.cheat.shovel_efficiency", Items.DIAMOND_SHOVEL, false, Map.of("minecraft:efficiency", 255));
+
+        private final String labelKey;
+        private final Item item;
+        private final boolean mine3x3;
+        private final Map<String, Integer> enchantments;
+
+        CheatToolPreset(String labelKey, Item item, boolean mine3x3, Map<String, Integer> enchantments) {
+            this.labelKey = labelKey;
+            this.item = item;
+            this.mine3x3 = mine3x3;
+            this.enchantments = enchantments;
         }
     }
 }
