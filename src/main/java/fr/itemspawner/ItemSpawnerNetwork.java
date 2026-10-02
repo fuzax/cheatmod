@@ -2,8 +2,11 @@ package fr.itemspawner;
 
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -18,7 +21,7 @@ import java.util.function.Supplier;
 
 @Mod.EventBusSubscriber(modid = ItemSpawner.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ItemSpawnerNetwork {
-    private static final String PROTOCOL_VERSION = "1";
+    private static final String PROTOCOL_VERSION = "2";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ItemSpawner.MOD_ID, "give_item"),
             () -> PROTOCOL_VERSION,
@@ -43,12 +46,20 @@ public class ItemSpawnerNetwork {
                 return;
             }
 
+            MinecraftServer server = player.getServer();
+            if (server == null || (!server.isSingleplayerOwner(player.getGameProfile()) && !player.hasPermissions(2))) {
+                player.sendSystemMessage(Component.translatable("itemspawner.permission.denied"));
+                return;
+            }
+
             Item item = BuiltInRegistries.ITEM.get(packet.itemId());
             if (item == null || item == Items.AIR) {
                 return;
             }
 
-            ItemStack stack = new ItemStack(item, 1);
+            int maxQuantity = Math.min(64, item.getMaxStackSize());
+            int quantity = Mth.clamp(packet.quantity(), 1, maxQuantity);
+            ItemStack stack = new ItemStack(item, quantity);
             if (!player.getInventory().add(stack)) {
                 player.drop(stack, false);
             }
@@ -56,17 +67,18 @@ public class ItemSpawnerNetwork {
         context.setPacketHandled(true);
     }
 
-    public static void sendToServer(ResourceLocation itemId) {
-        INSTANCE.sendToServer(new GiveItemPacket(itemId));
+    public static void sendToServer(ResourceLocation itemId, int quantity) {
+        INSTANCE.sendToServer(new GiveItemPacket(itemId, quantity));
     }
 
-    public record GiveItemPacket(ResourceLocation itemId) {
+    public record GiveItemPacket(ResourceLocation itemId, int quantity) {
         public void encode(FriendlyByteBuf buffer) {
             buffer.writeResourceLocation(itemId);
+            buffer.writeVarInt(quantity);
         }
 
         public static GiveItemPacket decode(FriendlyByteBuf buffer) {
-            return new GiveItemPacket(buffer.readResourceLocation());
+            return new GiveItemPacket(buffer.readResourceLocation(), buffer.readVarInt());
         }
     }
 }

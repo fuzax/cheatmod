@@ -2,5 +2,13 @@
   "key.itemspawner.open": "Ouvrir Item Spawner",
   "key.categories.itemspawner": "Item Spawner",
   "itemspawner.screen.title": "Item Spawner",
-  "itemspawner.screen.subtitle": "Clique sur un objet pour le recevoir"
+  "itemspawner.screen.subtitle": "Clique sur un objet pour le recevoir",
+  "itemspawner.search": "Rechercher un objet...",
+  "itemspawner.category.all": "Tout",
+  "itemspawner.category.blocks": "Blocs",
+  "itemspawner.category.tools": "Outils",
+  "itemspawner.category.food": "Nourr.",
+  "itemspawner.category.favorites": "Favoris",
+  "itemspawner.quantity": "Quantité : %s",
+  "itemspawner.permission.denied": "Tu n'as pas la permission d'utiliser ce menu sur ce serveur."
 }
