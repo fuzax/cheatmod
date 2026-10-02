@@ -3,6 +3,7 @@ package fr.itemspawner;
 import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
@@ -16,6 +17,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.IOException;
@@ -44,13 +46,18 @@ public class ItemSpawnerScreen extends Screen {
     private List<Item> filteredItems = List.of();
     private Category category = Category.ALL;
     private String searchText = "";
+    private Item selectedItem;
+    private Enchantment selectedEnchantment;
     private int quantity = 1;
+    private int enchantmentLevel = 1;
     private int scrollOffset;
     private int maxScroll;
     private int listX;
     private int listY;
     private int listWidth;
     private int listHeight;
+    private EditBox quantityInput;
+    private EditBox enchantmentLevelInput;
 
     public ItemSpawnerScreen() {
         super(Component.translatable("itemspawner.screen.title"));
@@ -62,7 +69,7 @@ public class ItemSpawnerScreen extends Screen {
         listX = 16;
         listWidth = this.width - 32;
         listY = 91;
-        listHeight = Math.max(40, this.height - 127);
+        listHeight = Math.max(36, this.height - 176);
 
         EditBox searchBox = new EditBox(this.font, listX, 42, listWidth, 20, Component.translatable("itemspawner.search"));
         searchBox.setMaxLength(100);
@@ -85,17 +92,91 @@ public class ItemSpawnerScreen extends Screen {
             }).bounds(buttonX, 66, categoryButtonWidth, 20).build());
         }
 
-        int controlsY = this.height - 27;
-        this.addRenderableWidget(Button.builder(Component.literal("-"), button -> setQuantity(quantity - 1))
-                .bounds(this.width / 2 - 74, controlsY, 24, 20).build());
-        this.addRenderableWidget(Button.builder(Component.literal("+"), button -> setQuantity(quantity + 1))
-                .bounds(this.width / 2 + 50, controlsY, 24, 20).build());
+        int controlsY = listY + listHeight + 4;
+
+        quantityInput = new EditBox(this.font, listX + 82, controlsY, 42, 20, Component.translatable("itemspawner.quantity.label"));
+        quantityInput.setMaxLength(2);
+        quantityInput.setFilter(value -> value.isEmpty() || value.matches("\\d{1,2}"));
+        quantityInput.setValue(Integer.toString(quantity));
+        quantityInput.setResponder(value -> {
+            if (!value.isEmpty()) {
+                quantity = Mth.clamp(Integer.parseInt(value), 1, MAX_QUANTITY);
+            }
+        });
+        this.addRenderableWidget(quantityInput);
+
+        int giveWidth = 66;
+        int levelLabelWidth = 25;
+        int levelInputWidth = 34;
+        int controlGap = 4;
+        int enchantmentButtonWidth = listWidth - giveWidth - levelLabelWidth - levelInputWidth - controlGap * 3;
+        Button enchantmentButton = Button.builder(enchantmentButtonLabel(), button -> openEnchantmentPicker())
+                .bounds(listX, controlsY + 23, enchantmentButtonWidth, 20).build();
+        this.addRenderableWidget(enchantmentButton);
+
+        enchantmentLevelInput = new EditBox(
+                this.font,
+                listX + enchantmentButtonWidth + controlGap + levelLabelWidth,
+                controlsY + 23,
+                levelInputWidth,
+                20,
+                Component.translatable("itemspawner.enchantment.level")
+        );
+        enchantmentLevelInput.setMaxLength(2);
+        enchantmentLevelInput.setFilter(value -> value.isEmpty() || value.matches("\\d{1,2}"));
+        enchantmentLevelInput.setValue(Integer.toString(enchantmentLevel));
+        enchantmentLevelInput.setResponder(value -> {
+            if (!value.isEmpty() && selectedEnchantment != null) {
+                enchantmentLevel = Mth.clamp(Integer.parseInt(value), 1, selectedEnchantment.getMaxLevel());
+            }
+        });
+        enchantmentLevelInput.active = selectedEnchantment != null;
+        this.addRenderableWidget(enchantmentLevelInput);
+
+        int giveX = listX + listWidth - giveWidth;
+        this.addRenderableWidget(Button.builder(Component.translatable("itemspawner.give"), button -> giveSelectedItem())
+                .bounds(giveX, controlsY + 23, giveWidth, 20)
+                .build());
 
         recalcScroll();
     }
 
-    private void setQuantity(int newQuantity) {
-        quantity = Mth.clamp(newQuantity, 1, MAX_QUANTITY);
+    private Component enchantmentButtonLabel() {
+        return selectedEnchantment == null
+                ? Component.translatable("itemspawner.enchantment.choose")
+                : Component.translatable(selectedEnchantment.getDescriptionId());
+    }
+
+    private void openEnchantmentPicker() {
+        if (selectedItem == null) {
+            return;
+        }
+        Minecraft.getInstance().setScreen(new ItemSpawnerEnchantmentScreen(
+                this,
+                selectedItem,
+                enchantment -> {
+                    selectedEnchantment = enchantment;
+                    enchantmentLevel = 1;
+                    Minecraft.getInstance().setScreen(this);
+                }
+        ));
+    }
+
+    private void giveSelectedItem() {
+        if (selectedItem == null) {
+            return;
+        }
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(selectedItem);
+        ResourceLocation enchantmentId = selectedEnchantment == null
+                ? null
+                : BuiltInRegistries.ENCHANTMENT.getKey(selectedEnchantment);
+        if (itemId != null) {
+            int safeQuantity = Mth.clamp(quantity, 1, MAX_QUANTITY);
+            int safeLevel = selectedEnchantment == null
+                    ? 0
+                    : Mth.clamp(enchantmentLevel, 1, selectedEnchantment.getMaxLevel());
+            ItemSpawnerNetwork.sendToServer(itemId, safeQuantity, enchantmentId, safeLevel);
+        }
     }
 
     private void recalcScroll() {
@@ -167,7 +248,7 @@ public class ItemSpawnerScreen extends Screen {
             Item item = filteredItems.get(itemIndex);
             boolean hovered = mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8;
 
-            if (hovered) {
+            if (hovered || item == selectedItem) {
                 guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, 0x5533AAFF);
             }
 
@@ -196,12 +277,28 @@ public class ItemSpawnerScreen extends Screen {
         guiGraphics.fill(scrollbarX, scrollbarY, scrollbarX + 3, scrollbarY + scrollbarHeight, 0xFF222222);
         guiGraphics.fill(scrollbarX, thumbY, scrollbarX + 3, thumbY + thumbHeight, 0xFF888888);
 
-        guiGraphics.drawCenteredString(
+        int controlsY = listY + listHeight + 4;
+        guiGraphics.drawString(this.font, Component.translatable("itemspawner.quantity.label"), listX, controlsY + 6, 0xFFFFFF);
+        if (selectedItem == null) {
+            guiGraphics.drawString(this.font, Component.translatable("itemspawner.selection.none"), listX + 132, controlsY + 6, 0xAAAAAA);
+        } else {
+            ItemStack preview = new ItemStack(selectedItem, quantity);
+            guiGraphics.renderItem(preview, listX + 132, controlsY + 1);
+            guiGraphics.renderItemDecorations(this.font, preview, listX + 132, controlsY + 1);
+            guiGraphics.drawString(
                 this.font,
-                Component.translatable("itemspawner.quantity", quantity),
-                this.width / 2,
-                this.height - 21,
+                Component.translatable("itemspawner.selection.preview", Component.translatable(selectedItem.getDescriptionId()), quantity),
+                listX + 152,
+                controlsY + 6,
                 0xFFFFFF
+            );
+        }
+        guiGraphics.drawString(
+            this.font,
+            Component.translatable("itemspawner.enchantment.level.short"),
+            listX + listWidth - 66 - 4 - 34 - 4 - 25,
+            controlsY + 29,
+            0xFFFFFF
         );
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
@@ -219,10 +316,15 @@ public class ItemSpawnerScreen extends Screen {
                 if (mouseX >= listX + listWidth - 31) {
                     toggleFavorite(item);
                 } else {
-                    ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
-                    if (itemId != null) {
-                        ItemSpawnerNetwork.sendToServer(itemId, quantity);
+                    selectedItem = item;
+                    selectedEnchantment = null;
+                    enchantmentLevel = 1;
+                    if (enchantmentLevelInput != null) {
+                        enchantmentLevelInput.setValue("1");
+                        enchantmentLevelInput.active = false;
                     }
+                    this.clearWidgets();
+                    this.init(this.minecraft, this.width, this.height);
                 }
                 return true;
             }
@@ -272,6 +374,20 @@ public class ItemSpawnerScreen extends Screen {
             Files.writeString(favoritesFile, GSON.toJson(savedIds));
         } catch (IOException ignored) {
         }
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (quantityInput != null && quantityInput.isFocused() && keyCode == 257) {
+            quantityInput.setValue(Integer.toString(Mth.clamp(quantity, 1, MAX_QUANTITY)));
+            return true;
+        }
+        if (enchantmentLevelInput != null && enchantmentLevelInput.isFocused() && keyCode == 257) {
+            int maxLevel = selectedEnchantment == null ? 1 : selectedEnchantment.getMaxLevel();
+            enchantmentLevelInput.setValue(Integer.toString(Mth.clamp(enchantmentLevel, 1, maxLevel)));
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override

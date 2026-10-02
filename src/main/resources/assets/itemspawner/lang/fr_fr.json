@@ -10,5 +10,16 @@
   "itemspawner.category.food": "Nourr.",
   "itemspawner.category.favorites": "Favoris",
   "itemspawner.quantity": "Quantité : %s",
+  "itemspawner.quantity.label": "Quantité :",
+  "itemspawner.selection.none": "Sélectionne un objet",
+  "itemspawner.selection.preview": "× %2$s %1$s",
+  "itemspawner.give": "Donner",
+  "itemspawner.enchantment.title": "Choisir un enchantement",
+  "itemspawner.enchantment.for_item": "Enchantements compatibles : %s",
+  "itemspawner.enchantment.choose": "Choisir un enchantement",
+  "itemspawner.enchantment.level": "Niveau",
+  "itemspawner.enchantment.level.short": "Niv.",
+  "itemspawner.enchantment.max_level": "Max. %s",
+  "itemspawner.search.enchantment": "Rechercher un enchantement...",
   "itemspawner.permission.denied": "Tu n'as pas la permission d'utiliser ce menu sur ce serveur."
 }
