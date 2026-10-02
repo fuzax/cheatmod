@@ -70,8 +70,10 @@ public class ItemSpawnerScreen extends Screen {
         super.init();
         listX = 16;
         listWidth = this.width - 32;
-        listY = 113;
-        listHeight = Math.max(36, this.height - 198);
+        int categoriesPerRow = 3;
+        int categoryRows = (CATEGORIES.length + categoriesPerRow - 1) / categoriesPerRow;
+        listY = 66 + categoryRows * 21 + 5;
+        listHeight = Math.max(36, this.height - listY - 85);
 
         EditBox searchBox = new EditBox(this.font, listX, 42, listWidth, 20, Component.translatable("itemspawner.search"));
         searchBox.setMaxLength(100);
@@ -88,20 +90,23 @@ public class ItemSpawnerScreen extends Screen {
         for (int index = 0; index < CATEGORIES.length; index++) {
             categoryButtonWidths[index] = this.font.width(CATEGORIES[index].label()) + 12;
         }
-        int buttonX = listX;
-        int buttonY = 66;
-        for (int index = 0; index < CATEGORIES.length; index++) {
-            Category buttonCategory = CATEGORIES[index];
-            int categoryButtonWidth = Math.min(listWidth, categoryButtonWidths[index]);
-            if (buttonX > listX && buttonX + categoryButtonWidth > listX + listWidth) {
-                buttonX = listX;
-                buttonY += 21;
+        for (int row = 0; row < categoryRows; row++) {
+            int rowStart = row * categoriesPerRow;
+            int rowEnd = Math.min(rowStart + categoriesPerRow, CATEGORIES.length);
+            int rowWidth = buttonGap * (rowEnd - rowStart - 1);
+            for (int index = rowStart; index < rowEnd; index++) {
+                rowWidth += categoryButtonWidths[index];
             }
-            this.addRenderableWidget(Button.builder(buttonCategory.label(), button -> {
-                category = buttonCategory;
-                recalcScroll();
-            }).bounds(buttonX, buttonY, categoryButtonWidth, 20).build());
-            buttonX += categoryButtonWidth + buttonGap;
+            int buttonX = listX + Math.max(0, (listWidth - rowWidth) / 2);
+            for (int index = rowStart; index < rowEnd; index++) {
+                Category buttonCategory = CATEGORIES[index];
+                int categoryButtonWidth = categoryButtonWidths[index];
+                this.addRenderableWidget(Button.builder(buttonCategory.label(), button -> {
+                    category = buttonCategory;
+                    recalcScroll();
+                }).bounds(buttonX, 66 + row * 21, categoryButtonWidth, 20).build());
+                buttonX += categoryButtonWidth + buttonGap;
+            }
         }
 
         int controlsY = listY + listHeight + 4;
