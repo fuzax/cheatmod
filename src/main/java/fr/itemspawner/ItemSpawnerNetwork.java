@@ -19,6 +19,8 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 import java.util.function.Supplier;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Mod.EventBusSubscriber(modid = ItemSpawner.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class ItemSpawnerNetwork {
@@ -58,25 +60,23 @@ public class ItemSpawnerNetwork {
                 return;
             }
 
-            int maxQuantity = Math.min(64, item.getMaxStackSize());
             int quantity = Mth.clamp(packet.quantity(), 1, 64);
-            Enchantment enchantment = packet.enchantmentId() == null
-                    ? null
-                    : BuiltInRegistries.ENCHANTMENT.get(packet.enchantmentId());
             ItemStack testStack = new ItemStack(item);
-            if (packet.enchantmentId() != null && (enchantment == null || !enchantment.canEnchant(testStack))) {
-                return;
+            Map<Enchantment, Integer> enchantments = new LinkedHashMap<>();
+            packet.enchantments().entrySet().stream().limit(64).forEach(entry -> {
+                Enchantment enchantment = BuiltInRegistries.ENCHANTMENT.get(entry.getKey());
+                if (enchantment != null && enchantment.canEnchant(testStack)) {
+                    enchantments.put(enchantment, Mth.clamp(entry.getValue(), 1, enchantment.getMaxLevel()));
+                }
+            });
+            if (enchantments.size() != packet.enchantments().size()) {
+                player.sendSystemMessage(Component.translatable("itemspawner.enchantment.incompatible"));
             }
-            int enchantmentLevel = enchantment == null
-                    ? 0
-                    : Mth.clamp(packet.enchantmentLevel(), 1, enchantment.getMaxLevel());
 
             for (int remaining = quantity; remaining > 0; ) {
                 int stackSize = Math.min(remaining, item.getMaxStackSize());
                 ItemStack stack = new ItemStack(item, stackSize);
-                if (enchantment != null) {
-                    stack.enchant(enchantment, enchantmentLevel);
-                }
+                enchantments.forEach(stack::enchant);
                 if (!player.getInventory().add(stack)) {
                     player.drop(stack, false);
                 }
@@ -86,27 +86,35 @@ public class ItemSpawnerNetwork {
         context.setPacketHandled(true);
     }
 
-    public static void sendToServer(ResourceLocation itemId, int quantity, ResourceLocation enchantmentId, int enchantmentLevel) {
-        INSTANCE.sendToServer(new GiveItemPacket(itemId, quantity, enchantmentId, enchantmentLevel));
+    public static void sendToServer(ResourceLocation itemId, int quantity, Map<ResourceLocation, Integer> enchantments) {
+        INSTANCE.sendToServer(new GiveItemPacket(itemId, quantity, enchantments));
     }
 
-    public record GiveItemPacket(ResourceLocation itemId, int quantity, ResourceLocation enchantmentId, int enchantmentLevel) {
+    public record GiveItemPacket(ResourceLocation itemId, int quantity, Map<ResourceLocation, Integer> enchantments) {
         public void encode(FriendlyByteBuf buffer) {
             buffer.writeResourceLocation(itemId);
             buffer.writeVarInt(quantity);
-            buffer.writeBoolean(enchantmentId != null);
-            if (enchantmentId != null) {
-                buffer.writeResourceLocation(enchantmentId);
-                buffer.writeVarInt(enchantmentLevel);
+            int count = Math.min(64, enchantments.size());
+            buffer.writeVarInt(count);
+            int written = 0;
+            for (Map.Entry<ResourceLocation, Integer> entry : enchantments.entrySet()) {
+                if (written++ >= count) {
+                    break;
+                }
+                buffer.writeResourceLocation(entry.getKey());
+                buffer.writeVarInt(entry.getValue());
             }
         }
 
         public static GiveItemPacket decode(FriendlyByteBuf buffer) {
             ResourceLocation itemId = buffer.readResourceLocation();
             int quantity = buffer.readVarInt();
-            ResourceLocation enchantmentId = buffer.readBoolean() ? buffer.readResourceLocation() : null;
-            int enchantmentLevel = enchantmentId == null ? 0 : buffer.readVarInt();
-            return new GiveItemPacket(itemId, quantity, enchantmentId, enchantmentLevel);
+            int count = Mth.clamp(buffer.readVarInt(), 0, 64);
+            Map<ResourceLocation, Integer> enchantments = new LinkedHashMap<>();
+            for (int index = 0; index < count; index++) {
+                enchantments.put(buffer.readResourceLocation(), buffer.readVarInt());
+            }
+            return new GiveItemPacket(itemId, quantity, enchantments);
         }
     }
 }

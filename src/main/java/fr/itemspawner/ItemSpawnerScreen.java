@@ -27,7 +27,9 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.StreamSupport;
 
@@ -47,9 +49,8 @@ public class ItemSpawnerScreen extends Screen {
     private Category category = Category.ALL;
     private String searchText = "";
     private Item selectedItem;
-    private Enchantment selectedEnchantment;
+    private final Map<Enchantment, Integer> selectedEnchantments = new LinkedHashMap<>();
     private int quantity = 1;
-    private int enchantmentLevel = 1;
     private int scrollOffset;
     private int maxScroll;
     private int listX;
@@ -57,7 +58,6 @@ public class ItemSpawnerScreen extends Screen {
     private int listWidth;
     private int listHeight;
     private EditBox quantityInput;
-    private EditBox enchantmentLevelInput;
 
     public ItemSpawnerScreen() {
         super(Component.translatable("itemspawner.screen.title"));
@@ -82,14 +82,22 @@ public class ItemSpawnerScreen extends Screen {
         this.addRenderableWidget(searchBox);
 
         int buttonGap = 2;
-        int categoryButtonWidth = (listWidth - buttonGap * (CATEGORIES.length - 1)) / CATEGORIES.length;
+        int[] categoryButtonWidths = new int[CATEGORIES.length];
+        int totalCategoryWidth = buttonGap * (CATEGORIES.length - 1);
+        for (int index = 0; index < CATEGORIES.length; index++) {
+            categoryButtonWidths[index] = this.font.width(CATEGORIES[index].label()) + 12;
+            totalCategoryWidth += categoryButtonWidths[index];
+        }
+        int extraWidth = Math.max(0, listWidth - totalCategoryWidth) / CATEGORIES.length;
+        int buttonX = listX;
         for (int index = 0; index < CATEGORIES.length; index++) {
             Category buttonCategory = CATEGORIES[index];
-            int buttonX = listX + index * (categoryButtonWidth + buttonGap);
+            int categoryButtonWidth = categoryButtonWidths[index] + extraWidth;
             this.addRenderableWidget(Button.builder(buttonCategory.label(), button -> {
                 category = buttonCategory;
                 recalcScroll();
             }).bounds(buttonX, 66, categoryButtonWidth, 20).build());
+            buttonX += categoryButtonWidth + buttonGap;
         }
 
         int controlsY = listY + listHeight + 4;
@@ -106,32 +114,11 @@ public class ItemSpawnerScreen extends Screen {
         this.addRenderableWidget(quantityInput);
 
         int giveWidth = 66;
-        int levelLabelWidth = 25;
-        int levelInputWidth = 34;
         int controlGap = 4;
-        int enchantmentButtonWidth = listWidth - giveWidth - levelLabelWidth - levelInputWidth - controlGap * 3;
+        int enchantmentButtonWidth = listWidth - giveWidth - controlGap;
         Button enchantmentButton = Button.builder(enchantmentButtonLabel(), button -> openEnchantmentPicker())
                 .bounds(listX, controlsY + 23, enchantmentButtonWidth, 20).build();
         this.addRenderableWidget(enchantmentButton);
-
-        enchantmentLevelInput = new EditBox(
-                this.font,
-                listX + enchantmentButtonWidth + controlGap + levelLabelWidth,
-                controlsY + 23,
-                levelInputWidth,
-                20,
-                Component.translatable("itemspawner.enchantment.level")
-        );
-        enchantmentLevelInput.setMaxLength(2);
-        enchantmentLevelInput.setFilter(value -> value.isEmpty() || value.matches("\\d{1,2}"));
-        enchantmentLevelInput.setValue(Integer.toString(enchantmentLevel));
-        enchantmentLevelInput.setResponder(value -> {
-            if (!value.isEmpty() && selectedEnchantment != null) {
-                enchantmentLevel = Mth.clamp(Integer.parseInt(value), 1, selectedEnchantment.getMaxLevel());
-            }
-        });
-        enchantmentLevelInput.active = selectedEnchantment != null;
-        this.addRenderableWidget(enchantmentLevelInput);
 
         int giveX = listX + listWidth - giveWidth;
         this.addRenderableWidget(Button.builder(Component.translatable("itemspawner.give"), button -> giveSelectedItem())
@@ -142,9 +129,7 @@ public class ItemSpawnerScreen extends Screen {
     }
 
     private Component enchantmentButtonLabel() {
-        return selectedEnchantment == null
-                ? Component.translatable("itemspawner.enchantment.choose")
-                : Component.translatable(selectedEnchantment.getDescriptionId());
+        return Component.translatable("itemspawner.enchantment.count", selectedEnchantments.size());
     }
 
     private void openEnchantmentPicker() {
@@ -154,9 +139,10 @@ public class ItemSpawnerScreen extends Screen {
         Minecraft.getInstance().setScreen(new ItemSpawnerEnchantmentScreen(
                 this,
                 selectedItem,
-                enchantment -> {
-                    selectedEnchantment = enchantment;
-                    enchantmentLevel = 1;
+                selectedEnchantments,
+                enchantments -> {
+                    selectedEnchantments.clear();
+                    selectedEnchantments.putAll(enchantments);
                     Minecraft.getInstance().setScreen(this);
                 }
         ));
@@ -167,15 +153,16 @@ public class ItemSpawnerScreen extends Screen {
             return;
         }
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(selectedItem);
-        ResourceLocation enchantmentId = selectedEnchantment == null
-                ? null
-                : BuiltInRegistries.ENCHANTMENT.getKey(selectedEnchantment);
         if (itemId != null) {
             int safeQuantity = Mth.clamp(quantity, 1, MAX_QUANTITY);
-            int safeLevel = selectedEnchantment == null
-                    ? 0
-                    : Mth.clamp(enchantmentLevel, 1, selectedEnchantment.getMaxLevel());
-            ItemSpawnerNetwork.sendToServer(itemId, safeQuantity, enchantmentId, safeLevel);
+            Map<ResourceLocation, Integer> enchantments = new LinkedHashMap<>();
+            selectedEnchantments.forEach((enchantment, level) -> {
+                ResourceLocation enchantmentId = BuiltInRegistries.ENCHANTMENT.getKey(enchantment);
+                if (enchantmentId != null) {
+                    enchantments.put(enchantmentId, Mth.clamp(level, 1, enchantment.getMaxLevel()));
+                }
+            });
+            ItemSpawnerNetwork.sendToServer(itemId, safeQuantity, enchantments);
         }
     }
 
@@ -293,13 +280,6 @@ public class ItemSpawnerScreen extends Screen {
                 0xFFFFFF
             );
         }
-        guiGraphics.drawString(
-            this.font,
-            Component.translatable("itemspawner.enchantment.level.short"),
-            listX + listWidth - 66 - 4 - 34 - 4 - 25,
-            controlsY + 29,
-            0xFFFFFF
-        );
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
@@ -317,12 +297,7 @@ public class ItemSpawnerScreen extends Screen {
                     toggleFavorite(item);
                 } else {
                     selectedItem = item;
-                    selectedEnchantment = null;
-                    enchantmentLevel = 1;
-                    if (enchantmentLevelInput != null) {
-                        enchantmentLevelInput.setValue("1");
-                        enchantmentLevelInput.active = false;
-                    }
+                    selectedEnchantments.clear();
                     this.clearWidgets();
                     this.init(this.minecraft, this.width, this.height);
                 }
@@ -380,11 +355,6 @@ public class ItemSpawnerScreen extends Screen {
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (quantityInput != null && quantityInput.isFocused() && keyCode == 257) {
             quantityInput.setValue(Integer.toString(Mth.clamp(quantity, 1, MAX_QUANTITY)));
-            return true;
-        }
-        if (enchantmentLevelInput != null && enchantmentLevelInput.isFocused() && keyCode == 257) {
-            int maxLevel = selectedEnchantment == null ? 1 : selectedEnchantment.getMaxLevel();
-            enchantmentLevelInput.setValue(Integer.toString(Mth.clamp(enchantmentLevel, 1, maxLevel)));
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
