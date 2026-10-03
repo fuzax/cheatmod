@@ -99,14 +99,16 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
                 this.font,
                 Component.translatable("itemspawner.enchantment.for_item", Component.translatable(item.getDescriptionId())),
                 this.width / 2,
-                25,
-                0xAAAAAA
+            25,
+            0xAAAAAA
         );
         graphics.drawCenteredString(this.font, Component.translatable("itemspawner.enchantment.help"), this.width / 2, 30 + this.font.lineHeight, 0xAAAAAA);
 
         int left = 20;
         int right = this.width - 20;
         graphics.fill(left, listY, right, listY + listHeight, 0x80000000);
+        graphics.fill(left, listY, right, listY + 1, 0xFF555555);
+        graphics.fill(left, listY + listHeight - 1, right, listY + listHeight, 0xFF555555);
         graphics.enableScissor(left, listY, right, listY + listHeight);
         int visibleRows = Math.min(listHeight / ENTRY_HEIGHT, filteredEnchantments.size() - scrollOffset);
         for (int row = 0; row < visibleRows; row++) {
@@ -114,9 +116,11 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
             Enchantment enchantment = filteredEnchantments.get(scrollOffset + row);
             boolean selected = selectedEnchantments.containsKey(enchantment);
             if (mouseX >= left && mouseX < right && mouseY >= y && mouseY < y + ENTRY_HEIGHT) {
-                graphics.fill(left + 1, y, right - 1, y + ENTRY_HEIGHT, 0x5533AAFF);
+                graphics.fill(left + 1, y, right - 1, y + ENTRY_HEIGHT, selected ? 0x88777777 : 0x44555555);
+            } else if (selected) {
+                graphics.fill(left + 1, y, right - 1, y + ENTRY_HEIGHT, 0x66555555);
             }
-            graphics.drawString(this.font, selected ? "[x]" : "[ ]", left + 6, y + 6, selected ? 0x55FF55 : 0xFFFFFF);
+            graphics.drawString(this.font, selected ? "[x]" : "[ ]", left + 6, y + 6, selected ? 0xFFFFFF : 0xAAAAAA);
             String enchantmentName = Component.translatable(enchantment.getDescriptionId()).getString();
             graphics.drawString(this.font, this.font.plainSubstrByWidth(enchantmentName, right - left - 112), left + 30, y + 6, 0xFFFFFF);
             String level = selected ? Integer.toString(selectedEnchantments.get(enchantment)) : "-";

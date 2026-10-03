@@ -10,6 +10,7 @@
   "itemspawner.category.cheat_tools": "Outils cheat",
   "itemspawner.category.food": "Nourriture",
   "itemspawner.category.favorites": "Favoris",
+  "itemspawner.list.count": "%s objets",
   "itemspawner.quantity": "Quantité : %s",
   "itemspawner.quantity.label": "Quantité :",
   "itemspawner.selection.none": "Sélectionne un objet",
