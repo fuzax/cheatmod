@@ -428,12 +428,12 @@ public class ItemSpawnerScreen extends Screen {
     }
 
     private enum Category {
-        ALL("itemspawner.category.all"),
-        BLOCKS("itemspawner.category.blocks"),
-        TOOLS("itemspawner.category.tools"),
-        CHEAT_TOOLS("itemspawner.category.cheat_tools"),
-        FOOD("itemspawner.category.food"),
-        FAVORITES("itemspawner.category.favorites");
+        ALL("all"),
+        BLOCKS("blocks"),
+        TOOLS("tools"),
+        CHEAT_TOOLS("cheat_tools"),
+        FOOD("food"),
+        FAVORITES("favorites");
 
         private final String translationKey;
 
