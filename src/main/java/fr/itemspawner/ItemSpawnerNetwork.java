@@ -28,7 +28,7 @@ import java.util.Map;
 public class ItemSpawnerNetwork {
     private static final String PROTOCOL_VERSION = "4";
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
-            new ResourceLocation(ItemSpawner.MOD_ID, "give_item"),
+            ResourceLocation.fromNamespaceAndPath(ItemSpawner.MOD_ID, "give_item"),
             () -> PROTOCOL_VERSION,
             PROTOCOL_VERSION::equals,
             PROTOCOL_VERSION::equals
@@ -47,7 +47,7 @@ public class ItemSpawnerNetwork {
         NetworkEvent.Context context = contextSupplier.get();
         context.enqueueWork(() -> {
             ServerPlayer player = context.getSender();
-            if (player == null) {
+            if (player == null || packet == null || packet.itemId() == null || packet.enchantments() == null) {
                 return;
             }
 
@@ -66,6 +66,9 @@ public class ItemSpawnerNetwork {
             ItemStack testStack = new ItemStack(item);
             Map<Enchantment, Integer> enchantments = new LinkedHashMap<>();
             packet.enchantments().entrySet().stream().limit(64).forEach(entry -> {
+                if (entry == null || entry.getKey() == null) {
+                    return;
+                }
                 Enchantment enchantment = BuiltInRegistries.ENCHANTMENT.get(entry.getKey());
                 if (enchantment != null && enchantment.canEnchant(testStack)) {
                     enchantments.put(enchantment, Mth.clamp(entry.getValue(), 1, enchantment.getMaxLevel()));
@@ -78,6 +81,9 @@ public class ItemSpawnerNetwork {
             for (int remaining = quantity; remaining > 0; ) {
                 int stackSize = Math.min(remaining, item.getMaxStackSize());
                 ItemStack stack = new ItemStack(item, stackSize);
+                if (packet.mine3x3()) {
+                    stack.getOrCreateTag().putBoolean("itemspawner:mine_3x3", true);
+                }
                 enchantments.forEach(stack::enchant);
                 if (!player.getInventory().add(stack)) {
                     player.drop(stack, false);

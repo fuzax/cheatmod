@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -50,7 +51,7 @@ public class ItemSpawnerToolEvents {
                 }
 
                 Block.dropResources(state, level, target, level.getBlockEntity(target), player, tool);
-                level.setBlock(target, state.getFluidState().createLegacyBlock(), 3);
+                level.setBlock(target, Blocks.AIR.defaultBlockState(), 3);
                 tool.hurtAndBreak(1, player, brokenPlayer -> brokenPlayer.broadcastBreakEvent(InteractionHand.MAIN_HAND));
             }
         }

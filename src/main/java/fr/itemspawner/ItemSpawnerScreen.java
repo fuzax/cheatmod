@@ -36,6 +36,13 @@ import java.util.stream.StreamSupport;
 public class ItemSpawnerScreen extends Screen {
     private static final int ENTRY_HEIGHT = 18;
     private static final int MAX_QUANTITY = 64;
+    private static final int PANEL_BG = 0x80000000;
+    private static final int PANEL_BORDER = 0xFF555555;
+    private static final int ENTRY_HOVER = 0x44555555;
+    private static final int ENTRY_SELECTED = 0x88777777;
+    private static final int ENTRY_SELECTED_BAR = 0xFFCCCCCC;
+    private static final int SCROLLBAR_BG = 0xFF222222;
+    private static final int SCROLLBAR_THUMB = 0xFF888888;
     private static final Gson GSON = new Gson();
     private static final Type FAVORITES_TYPE = new TypeToken<Set<String>>() { }.getType();
     private static final Category[] CATEGORIES = Category.values();
@@ -116,8 +123,13 @@ public class ItemSpawnerScreen extends Screen {
         quantityInput.setFilter(value -> value.isEmpty() || value.matches("\\d{1,2}"));
         quantityInput.setValue(Integer.toString(quantity));
         quantityInput.setResponder(value -> {
-            if (!value.isEmpty()) {
+            if (value.isEmpty()) {
+                return;
+            }
+            try {
                 quantity = Mth.clamp(Integer.parseInt(value), 1, MAX_QUANTITY);
+            } catch (NumberFormatException ignored) {
+                quantity = 1;
             }
         });
         this.addRenderableWidget(quantityInput);
@@ -176,6 +188,14 @@ public class ItemSpawnerScreen extends Screen {
     }
 
     private void recalcScroll() {
+        if (category == Category.CHEAT_TOOLS) {
+            filteredItems = List.of();
+            int visibleEntries = Math.max(1, listHeight / ENTRY_HEIGHT);
+            maxScroll = Math.max(0, CHEAT_TOOL_PRESETS.length - visibleEntries);
+            scrollOffset = Mth.clamp(scrollOffset, 0, maxScroll);
+            return;
+        }
+
         String query = searchText.strip().toLowerCase(Locale.ROOT);
         filteredItems = items.stream()
                 .filter(this::matchesCategory)
@@ -240,49 +260,66 @@ public class ItemSpawnerScreen extends Screen {
         Component countLabel = Component.translatable("itemspawner.list.count", entryCount());
         guiGraphics.drawString(this.font, category.label(), listX, listY - 13, 0xFFFFFF);
         guiGraphics.drawString(this.font, countLabel, listRight - this.font.width(countLabel), listY - 13, 0xAAAAAA);
-        guiGraphics.fill(listX, listY, listRight, listBottom, 0x80000000);
-        guiGraphics.fill(listX, listY, listRight, listY + 1, 0xFF555555);
-        guiGraphics.fill(listX, listBottom - 1, listRight, listBottom, 0xFF555555);
+
+        guiGraphics.fill(listX, listY, listRight, listBottom, PANEL_BG);
+        guiGraphics.fill(listX, listY, listRight, listY + 1, PANEL_BORDER);
+        guiGraphics.fill(listX, listBottom - 1, listRight, listBottom, PANEL_BORDER);
 
         guiGraphics.enableScissor(listX, listY, listRight, listBottom);
-        int visibleEntries = Math.min(listHeight / ENTRY_HEIGHT, entryCount() - scrollOffset);
+        int visibleEntries = Math.min(listHeight / ENTRY_HEIGHT, Math.max(0, entryCount() - scrollOffset));
         for (int row = 0; row < visibleEntries; row++) {
             int itemIndex = scrollOffset + row;
             int y = listY + row * ENTRY_HEIGHT;
             if (category == Category.CHEAT_TOOLS) {
-                CheatToolPreset preset = CHEAT_TOOL_PRESETS[itemIndex];
-                if (mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8) {
-                    guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, 0x55555555);
-                }
-                guiGraphics.renderItem(new ItemStack(preset.item), listX + 6, y + 1);
-                guiGraphics.drawString(this.font, Component.translatable(preset.labelKey), listX + 28, y + 5, 0xFFFFFF);
+                renderCheatToolEntry(guiGraphics, mouseX, mouseY, itemIndex, y, listRight);
                 continue;
             }
-            Item item = filteredItems.get(itemIndex);
-            boolean hovered = mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8;
-
-            if (item == selectedItem) {
-                guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, 0x88777777);
-                guiGraphics.fill(listX + 1, y, listX + 3, y + ENTRY_HEIGHT, 0xFFCCCCCC);
-            } else if (hovered) {
-                guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, 0x44555555);
-            }
-
-            guiGraphics.renderItem(new ItemStack(item), listX + 6, y + 1);
-            guiGraphics.drawString(
-                    this.font,
-                    Component.translatable(item.getDescriptionId()),
-                    listX + 28,
-                    y + 5,
-                    0xFFFFFF
-            );
-
-            ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
-            boolean favorite = itemId != null && favoriteIds.contains(itemId);
-            guiGraphics.drawString(this.font, favorite ? "*" : "+", listRight - 23, y + 5, favorite ? 0xFFFFFF : 0xAAAAAA);
+            renderItemEntry(guiGraphics, mouseX, mouseY, itemIndex, y, listRight);
         }
         guiGraphics.disableScissor();
 
+        renderScrollbar(guiGraphics, listRight);
+        renderControls(guiGraphics, listX, listWidth, listY, listHeight);
+        super.render(guiGraphics, mouseX, mouseY, partialTick);
+    }
+
+    private void renderCheatToolEntry(GuiGraphics guiGraphics, int mouseX, int mouseY, int itemIndex, int y, int listRight) {
+        CheatToolPreset preset = CHEAT_TOOL_PRESETS[itemIndex];
+        boolean hovered = mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8;
+        if (hovered) {
+            guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, ENTRY_HOVER);
+        }
+        guiGraphics.renderItem(new ItemStack(preset.item), listX + 6, y + 1);
+        guiGraphics.drawString(this.font, Component.translatable(preset.labelKey), listX + 28, y + 5, 0xFFFFFF);
+    }
+
+    private void renderItemEntry(GuiGraphics guiGraphics, int mouseX, int mouseY, int itemIndex, int y, int listRight) {
+        Item item = filteredItems.get(itemIndex);
+        boolean hovered = mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8;
+
+        if (item == selectedItem) {
+            guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, ENTRY_SELECTED);
+            guiGraphics.fill(listX + 1, y, listX + 3, y + ENTRY_HEIGHT, ENTRY_SELECTED_BAR);
+        } else if (hovered) {
+            guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, ENTRY_HOVER);
+        }
+
+        guiGraphics.renderItem(new ItemStack(item), listX + 6, y + 1);
+        guiGraphics.drawString(
+                this.font,
+                Component.translatable(item.getDescriptionId()),
+                listX + 28,
+                y + 5,
+                0xFFFFFF
+        );
+
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
+        boolean favorite = itemId != null && favoriteIds.contains(itemId);
+        guiGraphics.fill(listRight - 30, y + 2, listRight - 5, y + 16, favorite ? 0x55333333 : 0x33000000);
+        guiGraphics.drawString(this.font, favorite ? "*" : "+", listRight - 23, y + 5, favorite ? 0xFFFFFF : 0xAAAAAA);
+    }
+
+    private void renderScrollbar(GuiGraphics guiGraphics, int listRight) {
         int scrollbarX = listRight - 6;
         int scrollbarY = listY + 4;
         int scrollbarHeight = Math.max(1, listHeight - 8);
@@ -290,12 +327,14 @@ public class ItemSpawnerScreen extends Screen {
         thumbHeight = Math.min(thumbHeight, scrollbarHeight);
         int thumbTravel = Math.max(0, scrollbarHeight - thumbHeight);
         int thumbY = scrollbarY + (int) ((float) scrollOffset / Math.max(1, maxScroll) * thumbTravel);
-        guiGraphics.fill(scrollbarX, scrollbarY, scrollbarX + 3, scrollbarY + scrollbarHeight, 0xFF222222);
-        guiGraphics.fill(scrollbarX, thumbY, scrollbarX + 3, thumbY + thumbHeight, 0xFF888888);
+        guiGraphics.fill(scrollbarX, scrollbarY, scrollbarX + 3, scrollbarY + scrollbarHeight, SCROLLBAR_BG);
+        guiGraphics.fill(scrollbarX, thumbY, scrollbarX + 3, thumbY + thumbHeight, SCROLLBAR_THUMB);
+    }
 
+    private void renderControls(GuiGraphics guiGraphics, int listX, int listWidth, int listY, int listHeight) {
         int controlsY = listY + listHeight + 4;
-        guiGraphics.fill(listX, controlsY - 3, listX + listWidth, controlsY + 46, 0x80000000);
-        guiGraphics.fill(listX, controlsY - 3, listX + listWidth, controlsY - 2, 0xFF555555);
+        guiGraphics.fill(listX, controlsY - 3, listX + listWidth, controlsY + 46, PANEL_BG);
+        guiGraphics.fill(listX, controlsY - 3, listX + listWidth, controlsY - 2, PANEL_BORDER);
         guiGraphics.drawString(this.font, Component.translatable("itemspawner.quantity.label"), listX, controlsY + 6, 0xFFFFFF);
         if (selectedItem == null) {
             guiGraphics.drawString(this.font, Component.translatable("itemspawner.selection.none"), listX + 132, controlsY + 6, 0xAAAAAA);
@@ -313,7 +352,6 @@ public class ItemSpawnerScreen extends Screen {
             String fittedPreview = this.font.plainSubstrByWidth(previewLabel.getString(), Math.max(0, listWidth - 174));
             guiGraphics.drawString(this.font, fittedPreview, listX + 154, controlsY + 6, 0xFFFFFF);
         }
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
     @Override
@@ -350,7 +388,11 @@ public class ItemSpawnerScreen extends Screen {
         selectedMine3x3 = preset.mine3x3;
         selectedEnchantments.clear();
         preset.enchantments.forEach((id, level) -> {
-            Enchantment enchantment = BuiltInRegistries.ENCHANTMENT.get(new ResourceLocation(id));
+            ResourceLocation enchantmentId = ResourceLocation.tryParse(id);
+            if (enchantmentId == null) {
+                return;
+            }
+            Enchantment enchantment = BuiltInRegistries.ENCHANTMENT.get(enchantmentId);
             if (enchantment != null) {
                 selectedEnchantments.put(enchantment, level);
             }
