@@ -12,6 +12,7 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.component.DataComponents;
@@ -245,7 +246,7 @@ public class ItemSpawnerScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.extractBackground(guiGraphics);
+        this.extractBackground(guiGraphics, mouseX, mouseY, partialTick);
         guiGraphics.text(this.font, this.title, (this.width - this.font.width(this.title)) / 2, 9, 0xFFFFFF);
         Component subtitle = Component.translatable("itemspawner.screen.subtitle");
         guiGraphics.text(this.font, subtitle, (this.width - this.font.width(subtitle)) / 2, 24, 0xAAAAAA);
@@ -347,11 +348,14 @@ public class ItemSpawnerScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         if (button == 0 && mouseX >= listX && mouseX < listX + listWidth - 8 && mouseY >= listY && mouseY < listY + listHeight) {
             int rowOffset = (int) ((mouseY - listY) / ENTRY_HEIGHT);
             if (rowOffset >= listHeight / ENTRY_HEIGHT) {
-                return super.mouseClicked(mouseX, mouseY, button);
+                return super.mouseClicked(event, doubleClick);
             }
             int rowIndex = scrollOffset + rowOffset;
             if (category == Category.CHEAT_TOOLS && rowIndex >= 0 && rowIndex < CHEAT_TOOL_PRESETS.length) {
@@ -367,12 +371,12 @@ public class ItemSpawnerScreen extends Screen {
                     selectedMine3x3 = false;
                     selectedEnchantments.clear();
                     this.clearWidgets();
-                    this.init(this.minecraft, this.width, this.height);
+                    this.init(this.width, this.height);
                 }
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     private void selectCheatTool(CheatToolPreset preset) {
@@ -384,13 +388,12 @@ public class ItemSpawnerScreen extends Screen {
             if (enchantmentId == null) {
                 return;
             }
-            Enchantment enchantment = BuiltInRegistries.ENCHANTMENT.get(enchantmentId);
-            if (enchantment != null) {
-                selectedEnchantments.put(enchantment, level);
-            }
+            Registry<Enchantment> registry = Minecraft.getInstance().level.registryAccess()
+                    .lookupOrThrow(Registries.ENCHANTMENT);
+            registry.get(enchantmentId).ifPresent(enchantment -> selectedEnchantments.put(enchantment, level));
         });
         this.clearWidgets();
-        this.init(this.minecraft, this.width, this.height);
+        this.init(this.width, this.height);
     }
 
     private void toggleFavorite(Item item) {
@@ -442,22 +445,22 @@ public class ItemSpawnerScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (quantityInput != null && quantityInput.isFocused() && keyCode == 257) {
+    public boolean keyPressed(KeyEvent event) {
+        if (quantityInput != null && quantityInput.isFocused() && event.key() == 257) {
             quantityInput.setValue(Integer.toString(Mth.clamp(quantity, 1, MAX_QUANTITY)));
             return true;
         }
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double verticalDelta) {
         if (mouseX >= listX && mouseX <= listX + listWidth && mouseY >= listY && mouseY <= listY + listHeight) {
-            int scrollAmount = delta > 0 ? -3 : 3;
+            int scrollAmount = verticalDelta > 0 ? -3 : 3;
             scrollOffset = Mth.clamp(scrollOffset + scrollAmount, 0, maxScroll);
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, horizontalDelta, verticalDelta);
     }
 
     @Override
