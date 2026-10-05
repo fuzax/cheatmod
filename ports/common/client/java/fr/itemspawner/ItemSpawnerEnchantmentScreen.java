@@ -100,7 +100,7 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
-        this.extractBackground(graphics, mouseX, mouseY, partialTick);
+        graphics.fill(0, 0, this.width, this.height, 0x80000000);
         graphics.text(this.font, this.title, (this.width - this.font.width(this.title)) / 2, 12, 0xFFFFFF);
         Component itemLabel = Component.translatable("itemspawner.enchantment.for_item", Component.translatable(item.getDescriptionId()));
         graphics.text(this.font, itemLabel, (this.width - this.font.width(itemLabel)) / 2, 25, 0xAAAAAA);

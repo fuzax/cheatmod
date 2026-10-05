@@ -246,7 +246,7 @@ public class ItemSpawnerScreen extends Screen {
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.extractBackground(guiGraphics, mouseX, mouseY, partialTick);
+        guiGraphics.fill(0, 0, this.width, this.height, 0x80000000);
         guiGraphics.text(this.font, this.title, (this.width - this.font.width(this.title)) / 2, 9, 0xFFFFFF);
         Component subtitle = Component.translatable("itemspawner.screen.subtitle");
         guiGraphics.text(this.font, subtitle, (this.width - this.font.width(subtitle)) / 2, 24, 0xAAAAAA);
