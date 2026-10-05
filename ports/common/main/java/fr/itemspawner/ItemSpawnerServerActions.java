@@ -1,6 +1,9 @@
 package fr.itemspawner;
 
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.core.Registry;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -9,6 +12,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.util.Prediction;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,32 +21,32 @@ public final class ItemSpawnerServerActions {
     private ItemSpawnerServerActions() {
     }
 
-    public static void giveItem(ServerPlayer player, ItemSpawnerGivePayload payload) {
+    public static void giveItem(MinecraftServer server, ServerPlayer player, ItemSpawnerGivePayload payload) {
         if (payload == null || payload.itemId() == null || payload.enchantments() == null) {
             return;
         }
 
-        MinecraftServer server = player.getServer();
-        if (server == null || !server.isSingleplayer() || !server.isSingleplayerOwner(player.getGameProfile())) {
+        if (!server.isSingleplayer() || !server.isSingleplayerOwner(player.nameAndId())) {
             player.sendSystemMessage(Component.translatable("itemspawner.permission.denied"));
             return;
         }
 
-        Item item = BuiltInRegistries.ITEM.get(payload.itemId());
+        Item item = BuiltInRegistries.ITEM.getValue(payload.itemId());
         if (item == null || item == Items.AIR) {
             return;
         }
 
         int quantity = Mth.clamp(payload.quantity(), 1, 64);
         ItemStack testStack = new ItemStack(item);
-        Map<Enchantment, Integer> enchantments = new LinkedHashMap<>();
+        Registry<Enchantment> enchantmentRegistry = player.level().registryAccess().lookupOrThrow(Registries.ENCHANTMENT);
+        Map<Holder<Enchantment>, Integer> enchantments = new LinkedHashMap<>();
         payload.enchantments().entrySet().stream().limit(64).forEach(entry -> {
             if (entry.getKey() == null || entry.getValue() == null) {
                 return;
             }
-            Enchantment enchantment = BuiltInRegistries.ENCHANTMENT.get(entry.getKey());
-            if (enchantment != null && enchantment.canEnchant(testStack)) {
-                enchantments.put(enchantment, Mth.clamp(entry.getValue(), 1, enchantment.getMaxLevel()));
+            Holder<Enchantment> enchantment = enchantmentRegistry.get(entry.getKey()).orElse(null);
+            if (enchantment != null && enchantment.value().canEnchant(testStack)) {
+                enchantments.put(enchantment, Mth.clamp(entry.getValue(), 1, enchantment.value().getMaxLevel()));
             }
         });
         if (enchantments.size() != payload.enchantments().size()) {
@@ -50,14 +54,14 @@ public final class ItemSpawnerServerActions {
         }
 
         for (int remaining = quantity; remaining > 0; ) {
-            int stackSize = Math.min(remaining, item.getMaxStackSize());
+            int stackSize = Math.min(remaining, testStack.getMaxStackSize());
             ItemStack stack = new ItemStack(item, stackSize);
             if (payload.mine3x3()) {
                 ItemSpawnerToolData.markMine3x3(stack);
             }
             enchantments.forEach(stack::enchant);
             if (!player.getInventory().add(stack)) {
-                player.drop(stack, false);
+                player.drop(stack, false, Prediction.DELAYED);
             }
             remaining -= stackSize;
         }

@@ -18,21 +18,21 @@ public record ItemSpawnerGivePayload(
             Identifier.fromNamespaceAndPath("itemspawner", "give_item")
     );
     public static final StreamCodec<RegistryFriendlyByteBuf, ItemSpawnerGivePayload> STREAM_CODEC = StreamCodec.of(
-            ItemSpawnerGivePayload::write,
-            ItemSpawnerGivePayload::read
+            ItemSpawnerGivePayload::encode,
+            ItemSpawnerGivePayload::decode
     );
 
     public ItemSpawnerGivePayload {
         enchantments = Map.copyOf(enchantments);
     }
 
-    private void write(RegistryFriendlyByteBuf buffer) {
-        buffer.writeIdentifier(itemId);
-        buffer.writeVarInt(quantity);
-        int count = Math.min(64, enchantments.size());
+    private static void encode(RegistryFriendlyByteBuf buffer, ItemSpawnerGivePayload payload) {
+        buffer.writeIdentifier(payload.itemId());
+        buffer.writeVarInt(payload.quantity());
+        int count = Math.min(64, payload.enchantments().size());
         buffer.writeVarInt(count);
         int written = 0;
-        for (Map.Entry<Identifier, Integer> entry : enchantments.entrySet()) {
+        for (Map.Entry<Identifier, Integer> entry : payload.enchantments().entrySet()) {
             if (written++ >= count) {
                 break;
             }
@@ -42,7 +42,7 @@ public record ItemSpawnerGivePayload(
         buffer.writeBoolean(mine3x3);
     }
 
-    private static ItemSpawnerGivePayload read(RegistryFriendlyByteBuf buffer) {
+    private static ItemSpawnerGivePayload decode(RegistryFriendlyByteBuf buffer) {
         Identifier itemId = buffer.readIdentifier();
         int quantity = buffer.readVarInt();
         int count = Math.max(0, Math.min(64, buffer.readVarInt()));

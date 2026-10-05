@@ -40,7 +40,8 @@ dependencies {
     implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
 }
 
-sourceSets.main.java.srcDir('../common/java')
+sourceSets.main.java.srcDir('../common/main/java')
+sourceSets.main.java.srcDir('../common/client/java')
 
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [

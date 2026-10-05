@@ -26,9 +26,8 @@ public final class ItemSpawnerFabricClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (openMenu.consumeClick()
                     && client.hasSingleplayerServer()
-                    && client.player != null
-                    && client.screen == null) {
-                client.setScreen(new ItemSpawnerScreen());
+                    && client.player != null) {
+                client.setScreenAndShow(new ItemSpawnerScreen());
             }
         });
     }

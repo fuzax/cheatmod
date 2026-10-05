@@ -19,6 +19,6 @@ public final class ItemSpawnerToolData {
     public static boolean isMine3x3(ItemStack stack) {
         CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
         CompoundTag tag = customData.copyTag();
-        return tag.getBoolean(MINE_3X3_KEY);
+        return tag.getBoolean(MINE_3X3_KEY).orElse(false);
     }
 }

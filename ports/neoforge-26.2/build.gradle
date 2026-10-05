@@ -12,7 +12,8 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
-sourceSets.main.java.srcDir('../common/java')
+sourceSets.main.java.srcDir('../common/main/java')
+sourceSets.main.java.srcDir('../common/client/java')
 
 neoForge {
     version = neo_version

@@ -10,14 +10,18 @@ base {
 }
 
 loom {
+    splitEnvironmentSourceSets()
+
     mods {
         itemspawner {
             sourceSet sourceSets.main
+            sourceSet sourceSets.client
         }
     }
 }
 
-sourceSets.main.java.srcDir('../common/java')
+sourceSets.main.java.srcDir('../common/main/java')
+sourceSets.client.java.srcDir('../common/client/java')
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
