@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "itemspawner",
+  "version": "1.0.0",
+  "name": "Item Spawner",
+  "description": "Gestionnaire d'items pour Minecraft solo.",
+  "authors": ["TonNom"],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["fr.itemspawner.fabric.ItemSpawnerFabric"],
+    "client": ["fr.itemspawner.fabric.ItemSpawnerFabricClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "~26.3",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

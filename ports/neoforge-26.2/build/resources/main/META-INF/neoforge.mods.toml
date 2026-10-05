@@ -1,0 +1,24 @@
+modLoader="javafml"
+loaderVersion="[26.2,)"
+license="MIT"
+
+[[mods]]
+modId="itemspawner"
+version="1.0.0"
+displayName="Item Spawner"
+authors="TonNom"
+description='''Gestionnaire d'items pour Minecraft solo.'''
+
+[[dependencies.itemspawner]]
+modId="neoforge"
+type="required"
+versionRange="[26.2.0.88,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.itemspawner]]
+modId="minecraft"
+type="required"
+versionRange="[26.2]"
+ordering="NONE"
+side="BOTH"

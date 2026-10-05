@@ -1,0 +1,69 @@
+plugins {
+    id 'java'
+    id 'net.minecraftforge.gradle' version '[7.0.17,8)'
+}
+
+group = 'fr.itemspawner'
+version = mod_version
+
+base {
+    archivesName = "itemspawner-forge-${minecraft_version}"
+}
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+minecraft {
+    runs {
+        configureEach {
+            workingDir = layout.projectDirectory.dir('run')
+            systemProperty 'forge.logging.console.level', 'info'
+            mods {
+                itemspawner {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        client {}
+        server { args '--nogui' }
+    }
+}
+
+repositories {
+    minecraft.mavenizer(it)
+    maven fg.forgeMaven
+    maven fg.minecraftLibsMaven
+    mavenCentral()
+}
+
+dependencies {
+    implementation minecraft.dependency("net.minecraftforge:forge:${minecraft_version}-${forge_version}")
+}
+
+sourceSets.main.java.srcDir('../common/java')
+
+tasks.named('processResources', ProcessResources).configure {
+    var replaceProperties = [
+            mod_id: mod_id,
+            mod_name: mod_name,
+            mod_license: mod_license,
+            mod_version: mod_version,
+            mod_authors: mod_authors,
+            mod_description: mod_description,
+            forge_version_range: '[66,)',
+            minecraft_version_range: '[26.3,26.4)',
+            loader_version_range: '[66,)'
+    ]
+
+    inputs.properties replaceProperties
+    from('../../src/main/resources/assets') {
+        into 'assets'
+    }
+    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+        expand replaceProperties
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    finalizedBy 'reobfJar'
+}
