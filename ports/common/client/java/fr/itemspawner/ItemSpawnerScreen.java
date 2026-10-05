@@ -4,11 +4,17 @@ import com.google.gson.Gson;
 import com.google.gson.JsonParseException;
 import com.google.gson.reflect.TypeToken;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.ItemTags;
@@ -57,7 +63,7 @@ public class ItemSpawnerScreen extends Screen {
     private String searchText = "";
     private Item selectedItem;
     private boolean selectedMine3x3;
-    private final Map<Enchantment, Integer> selectedEnchantments = new LinkedHashMap<>();
+    private final Map<Holder<Enchantment>, Integer> selectedEnchantments = new LinkedHashMap<>();
     private int quantity = 1;
     private int scrollOffset;
     private int maxScroll;
@@ -119,7 +125,6 @@ public class ItemSpawnerScreen extends Screen {
 
         quantityInput = new EditBox(this.font, listX + 82, controlsY, 42, 20, Component.translatable("itemspawner.quantity.label"));
         quantityInput.setMaxLength(2);
-        quantityInput.setFilter(value -> value.isEmpty() || value.matches("\\d{1,2}"));
         quantityInput.setValue(Integer.toString(quantity));
         quantityInput.setResponder(value -> {
             if (value.isEmpty()) {
@@ -156,14 +161,14 @@ public class ItemSpawnerScreen extends Screen {
         if (selectedItem == null) {
             return;
         }
-        Minecraft.getInstance().setScreen(new ItemSpawnerEnchantmentScreen(
+        Minecraft.getInstance().setScreenAndShow(new ItemSpawnerEnchantmentScreen(
                 this,
                 selectedItem,
                 selectedEnchantments,
                 enchantments -> {
                     selectedEnchantments.clear();
                     selectedEnchantments.putAll(enchantments);
-                    Minecraft.getInstance().setScreen(this);
+                    Minecraft.getInstance().setScreenAndShow(this);
                 }
         ));
     }
@@ -176,12 +181,8 @@ public class ItemSpawnerScreen extends Screen {
         if (itemId != null) {
             int safeQuantity = Mth.clamp(quantity, 1, MAX_QUANTITY);
             Map<Identifier, Integer> enchantments = new LinkedHashMap<>();
-            selectedEnchantments.forEach((enchantment, level) -> {
-                Identifier enchantmentId = BuiltInRegistries.ENCHANTMENT.getKey(enchantment);
-                if (enchantmentId != null) {
-                    enchantments.put(enchantmentId, Mth.clamp(level, 1, 255));
-                }
-            });
+            selectedEnchantments.forEach((enchantment, level) -> enchantment.unwrapKey()
+                    .ifPresent(key -> enchantments.put(key.identifier(), Mth.clamp(level, 1, 255))));
             ItemSpawnerNetwork.sendToServer(itemId, safeQuantity, enchantments, selectedMine3x3);
         }
     }
@@ -215,7 +216,7 @@ public class ItemSpawnerScreen extends Screen {
             case BLOCKS -> item instanceof BlockItem;
             case TOOLS -> isTool(item);
             case CHEAT_TOOLS -> false;
-            case FOOD -> new ItemStack(item).isEdible();
+            case FOOD -> new ItemStack(item).has(DataComponents.FOOD);
             case FAVORITES -> {
                 Identifier itemId = BuiltInRegistries.ITEM.getKey(item);
                 yield itemId != null && favoriteIds.contains(itemId);
@@ -243,28 +244,22 @@ public class ItemSpawnerScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 9, 0xFFFFFF);
-        guiGraphics.drawCenteredString(
-                this.font,
-                Component.translatable("itemspawner.screen.subtitle"),
-                this.width / 2,
-                24,
-                0xAAAAAA
-        );
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
+        this.extractBackground(guiGraphics);
+        guiGraphics.text(this.font, this.title, (this.width - this.font.width(this.title)) / 2, 9, 0xFFFFFF);
+        Component subtitle = Component.translatable("itemspawner.screen.subtitle");
+        guiGraphics.text(this.font, subtitle, (this.width - this.font.width(subtitle)) / 2, 24, 0xAAAAAA);
 
         int listRight = listX + listWidth;
         int listBottom = listY + listHeight;
         Component countLabel = Component.translatable("itemspawner.list.count", entryCount());
-        guiGraphics.drawString(this.font, category.label(), listX, listY - 13, 0xFFFFFF);
-        guiGraphics.drawString(this.font, countLabel, listRight - this.font.width(countLabel), listY - 13, 0xAAAAAA);
+        guiGraphics.text(this.font, category.label(), listX, listY - 13, 0xFFFFFF);
+        guiGraphics.text(this.font, countLabel, listRight - this.font.width(countLabel), listY - 13, 0xAAAAAA);
 
         guiGraphics.fill(listX, listY, listRight, listBottom, PANEL_BG);
         guiGraphics.fill(listX, listY, listRight, listY + 1, PANEL_BORDER);
         guiGraphics.fill(listX, listBottom - 1, listRight, listBottom, PANEL_BORDER);
 
-        guiGraphics.enableScissor(listX, listY, listRight, listBottom);
         int visibleEntries = Math.min(listHeight / ENTRY_HEIGHT, Math.max(0, entryCount() - scrollOffset));
         for (int row = 0; row < visibleEntries; row++) {
             int itemIndex = scrollOffset + row;
@@ -275,24 +270,22 @@ public class ItemSpawnerScreen extends Screen {
             }
             renderItemEntry(guiGraphics, mouseX, mouseY, itemIndex, y, listRight);
         }
-        guiGraphics.disableScissor();
-
         renderScrollbar(guiGraphics, listRight);
         renderControls(guiGraphics, listX, listWidth, listY, listHeight);
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderCheatToolEntry(GuiGraphics guiGraphics, int mouseX, int mouseY, int itemIndex, int y, int listRight) {
+    private void renderCheatToolEntry(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, int itemIndex, int y, int listRight) {
         CheatToolPreset preset = CHEAT_TOOL_PRESETS[itemIndex];
         boolean hovered = mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8;
         if (hovered) {
             guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, ENTRY_HOVER);
         }
-        guiGraphics.renderItem(new ItemStack(preset.item), listX + 6, y + 1);
-        guiGraphics.drawString(this.font, Component.translatable(preset.labelKey), listX + 28, y + 5, 0xFFFFFF);
+        guiGraphics.item(new ItemStack(preset.item), listX + 6, y + 1);
+        guiGraphics.text(this.font, Component.translatable(preset.labelKey), listX + 28, y + 5, 0xFFFFFF);
     }
 
-    private void renderItemEntry(GuiGraphics guiGraphics, int mouseX, int mouseY, int itemIndex, int y, int listRight) {
+    private void renderItemEntry(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, int itemIndex, int y, int listRight) {
         Item item = filteredItems.get(itemIndex);
         boolean hovered = mouseY >= y && mouseY < y + ENTRY_HEIGHT && mouseX >= listX && mouseX < listRight - 8;
 
@@ -303,8 +296,8 @@ public class ItemSpawnerScreen extends Screen {
             guiGraphics.fill(listX + 1, y, listRight - 8, y + ENTRY_HEIGHT, ENTRY_HOVER);
         }
 
-        guiGraphics.renderItem(new ItemStack(item), listX + 6, y + 1);
-        guiGraphics.drawString(
+        guiGraphics.item(new ItemStack(item), listX + 6, y + 1);
+        guiGraphics.text(
                 this.font,
                 Component.translatable(item.getDescriptionId()),
                 listX + 28,
@@ -315,10 +308,10 @@ public class ItemSpawnerScreen extends Screen {
         Identifier itemId = BuiltInRegistries.ITEM.getKey(item);
         boolean favorite = itemId != null && favoriteIds.contains(itemId);
         guiGraphics.fill(listRight - 30, y + 2, listRight - 5, y + 16, favorite ? 0x55333333 : 0x33000000);
-        guiGraphics.drawString(this.font, favorite ? "*" : "+", listRight - 23, y + 5, favorite ? 0xFFFFFF : 0xAAAAAA);
+        guiGraphics.text(this.font, favorite ? "*" : "+", listRight - 23, y + 5, favorite ? 0xFFFFFF : 0xAAAAAA);
     }
 
-    private void renderScrollbar(GuiGraphics guiGraphics, int listRight) {
+    private void renderScrollbar(GuiGraphicsExtractor guiGraphics, int listRight) {
         int scrollbarX = listRight - 6;
         int scrollbarY = listY + 4;
         int scrollbarHeight = Math.max(1, listHeight - 8);
@@ -330,26 +323,26 @@ public class ItemSpawnerScreen extends Screen {
         guiGraphics.fill(scrollbarX, thumbY, scrollbarX + 3, thumbY + thumbHeight, SCROLLBAR_THUMB);
     }
 
-    private void renderControls(GuiGraphics guiGraphics, int listX, int listWidth, int listY, int listHeight) {
+    private void renderControls(GuiGraphicsExtractor guiGraphics, int listX, int listWidth, int listY, int listHeight) {
         int controlsY = listY + listHeight + 4;
         guiGraphics.fill(listX, controlsY - 3, listX + listWidth, controlsY + 46, PANEL_BG);
         guiGraphics.fill(listX, controlsY - 3, listX + listWidth, controlsY - 2, PANEL_BORDER);
-        guiGraphics.drawString(this.font, Component.translatable("itemspawner.quantity.label"), listX, controlsY + 6, 0xFFFFFF);
+        guiGraphics.text(this.font, Component.translatable("itemspawner.quantity.label"), listX, controlsY + 6, 0xFFFFFF);
         if (selectedItem == null) {
-            guiGraphics.drawString(this.font, Component.translatable("itemspawner.selection.none"), listX + 132, controlsY + 6, 0xAAAAAA);
+            guiGraphics.text(this.font, Component.translatable("itemspawner.selection.none"), listX + 132, controlsY + 6, 0xAAAAAA);
         } else {
             ItemStack preview = new ItemStack(selectedItem, quantity);
             guiGraphics.fill(listX + 130, controlsY, listX + 150, controlsY + 20, 0xFF303030);
             guiGraphics.fill(listX + 130, controlsY, listX + 150, controlsY + 1, 0xFF888888);
-            guiGraphics.renderItem(preview, listX + 132, controlsY + 1);
-            guiGraphics.renderItemDecorations(this.font, preview, listX + 132, controlsY + 1);
+            guiGraphics.item(preview, listX + 132, controlsY + 1);
+            guiGraphics.itemDecorations(this.font, preview, listX + 132, controlsY + 1);
             Component previewLabel = Component.translatable(
                     "itemspawner.selection.preview",
                     Component.translatable(selectedItem.getDescriptionId()),
                     quantity
             );
             String fittedPreview = this.font.plainSubstrByWidth(previewLabel.getString(), Math.max(0, listWidth - 174));
-            guiGraphics.drawString(this.font, fittedPreview, listX + 154, controlsY + 6, 0xFFFFFF);
+            guiGraphics.text(this.font, fittedPreview, listX + 154, controlsY + 6, 0xFFFFFF);
         }
     }
 
