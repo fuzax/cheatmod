@@ -61,7 +61,7 @@ public final class ItemSpawnerServerActions {
             }
             enchantments.forEach(stack::enchant);
             if (!player.getInventory().add(stack)) {
-                player.drop(stack, false, Prediction.DELAYED);
+                player.drop(stack, false, Prediction.SERVER_ONLY);
             }
             remaining -= stackSize;
         }

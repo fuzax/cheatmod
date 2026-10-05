@@ -6,7 +6,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -28,7 +27,7 @@ public final class ItemSpawnerToolEvents {
         if (!(world instanceof ServerLevel level)
                 || !(player instanceof ServerPlayer serverPlayer)
                 || !level.getServer().isSingleplayer()
-                || !level.getServer().isSingleplayerOwner(serverPlayer.getGameProfile())) {
+                || !level.getServer().isSingleplayerOwner(serverPlayer.nameAndId())) {
             return true;
         }
 
@@ -38,7 +37,12 @@ public final class ItemSpawnerToolEvents {
         }
 
         var look = serverPlayer.getLookAngle();
-        Direction facing = Direction.getNearest(look.x, look.y, look.z);
+        Direction facing = Direction.getNearest(
+            (int) Math.round(look.x * 1000),
+            (int) Math.round(look.y * 1000),
+            (int) Math.round(look.z * 1000),
+            null
+        );
         Direction firstAxis = facing.getAxis() == Direction.Axis.Y ? Direction.EAST : Direction.UP;
         Direction secondAxis = switch (facing.getAxis()) {
             case X, Y -> Direction.SOUTH;

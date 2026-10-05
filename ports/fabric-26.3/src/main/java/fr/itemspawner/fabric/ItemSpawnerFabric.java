@@ -1,6 +1,5 @@
 package fr.itemspawner.fabric;
 
-import fr.itemspawner.ItemSpawnerNetwork;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
 

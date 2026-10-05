@@ -39,7 +39,7 @@ public record ItemSpawnerGivePayload(
             buffer.writeIdentifier(entry.getKey());
             buffer.writeVarInt(entry.getValue());
         }
-        buffer.writeBoolean(mine3x3);
+        buffer.writeBoolean(payload.mine3x3());
     }
 
     private static ItemSpawnerGivePayload decode(RegistryFriendlyByteBuf buffer) {
