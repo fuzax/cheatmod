@@ -1,11 +1,14 @@
 package fr.itemspawner;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.Item;
@@ -23,10 +26,10 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
     private static final int ENTRY_HEIGHT = 20;
     private final Screen parent;
     private final Item item;
-    private final Consumer<Map<Enchantment, Integer>> onSelect;
-    private final List<Enchantment> enchantments;
-    private final Map<Enchantment, Integer> selectedEnchantments;
-    private List<Enchantment> filteredEnchantments;
+    private final Consumer<Map<Holder<Enchantment>, Integer>> onSelect;
+    private final List<Holder<Enchantment>> enchantments;
+    private final Map<Holder<Enchantment>, Integer> selectedEnchantments;
+    private List<Holder<Enchantment>> filteredEnchantments;
     private String searchText = "";
     private int scrollOffset;
     private int maxScroll;
@@ -37,8 +40,8 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
     public ItemSpawnerEnchantmentScreen(
             Screen parent,
             Item item,
-            Map<Enchantment, Integer> selectedEnchantments,
-            Consumer<Map<Enchantment, Integer>> onSelect
+            Map<Holder<Enchantment>, Integer> selectedEnchantments,
+            Consumer<Map<Holder<Enchantment>, Integer>> onSelect
     ) {
         super(Component.translatable("itemspawner.enchantment.title"));
         this.parent = parent;
@@ -46,9 +49,13 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
         this.onSelect = onSelect;
         this.selectedEnchantments = new LinkedHashMap<>(selectedEnchantments);
         ItemStack stack = new ItemStack(item);
-        this.enchantments = BuiltInRegistries.ENCHANTMENT.stream()
-                .filter(enchantment -> enchantment.canEnchant(stack))
-                .sorted(Comparator.comparing(enchantment -> Component.translatable(enchantment.getDescriptionId()).getString()))
+        Registry<Enchantment> registry = Minecraft.getInstance().level.registryAccess()
+            .lookupOrThrow(Registries.ENCHANTMENT);
+        this.enchantments = registry.stream()
+            .filter(enchantment -> enchantment.canEnchant(stack))
+            .map(enchantment -> registry.get(registry.getKey(enchantment)).orElseThrow())
+            .map(enchantment -> (Holder<Enchantment>) enchantment)
+            .sorted(Comparator.comparing(enchantment -> enchantment.value().description().getString()))
                 .toList();
         this.filteredEnchantments = this.enchantments;
     }
@@ -69,7 +76,7 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
         this.addRenderableWidget(searchBox);
         applyButton = Button.builder(applyLabel(), button -> {
             onSelect.accept(new LinkedHashMap<>(selectedEnchantments));
-            Minecraft.getInstance().setScreen(parent);
+            Minecraft.getInstance().setScreenAndShow(parent);
         }).bounds(listX, this.height - 26, listWidth, 20).build();
         this.addRenderableWidget(applyButton);
         filterEnchantments(searchText);
@@ -84,7 +91,7 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
         String normalizedQuery = query.strip().toLowerCase(Locale.ROOT);
         filteredEnchantments = enchantments.stream()
                 .filter(enchantment -> normalizedQuery.isEmpty()
-                        || Component.translatable(enchantment.getDescriptionId()).getString().toLowerCase(Locale.ROOT).contains(normalizedQuery))
+                        || enchantment.value().description().getString().toLowerCase(Locale.ROOT).contains(normalizedQuery))
                 .toList();
         int visibleRows = Math.max(1, listHeight / ENTRY_HEIGHT);
         maxScroll = Math.max(0, filteredEnchantments.size() - visibleRows);
@@ -92,59 +99,56 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, 12, 0xFFFFFF);
-        graphics.drawCenteredString(
-                this.font,
-                Component.translatable("itemspawner.enchantment.for_item", Component.translatable(item.getDescriptionId())),
-                this.width / 2,
-            25,
-            0xAAAAAA
-        );
-        graphics.drawCenteredString(this.font, Component.translatable("itemspawner.enchantment.help"), this.width / 2, 30 + this.font.lineHeight, 0xAAAAAA);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        this.extractBackground(graphics, mouseX, mouseY, partialTick);
+        graphics.text(this.font, this.title, (this.width - this.font.width(this.title)) / 2, 12, 0xFFFFFF);
+        Component itemLabel = Component.translatable("itemspawner.enchantment.for_item", Component.translatable(item.getDescriptionId()));
+        graphics.text(this.font, itemLabel, (this.width - this.font.width(itemLabel)) / 2, 25, 0xAAAAAA);
+        Component help = Component.translatable("itemspawner.enchantment.help");
+        graphics.text(this.font, help, (this.width - this.font.width(help)) / 2, 30 + this.font.lineHeight, 0xAAAAAA);
 
         int left = 20;
         int right = this.width - 20;
         graphics.fill(left, listY, right, listY + listHeight, 0x80000000);
         graphics.fill(left, listY, right, listY + 1, 0xFF555555);
         graphics.fill(left, listY + listHeight - 1, right, listY + listHeight, 0xFF555555);
-        graphics.enableScissor(left, listY, right, listY + listHeight);
         int visibleRows = Math.min(listHeight / ENTRY_HEIGHT, filteredEnchantments.size() - scrollOffset);
         for (int row = 0; row < visibleRows; row++) {
             int y = listY + row * ENTRY_HEIGHT;
-            Enchantment enchantment = filteredEnchantments.get(scrollOffset + row);
+            Holder<Enchantment> enchantment = filteredEnchantments.get(scrollOffset + row);
             boolean selected = selectedEnchantments.containsKey(enchantment);
             if (mouseX >= left && mouseX < right && mouseY >= y && mouseY < y + ENTRY_HEIGHT) {
                 graphics.fill(left + 1, y, right - 1, y + ENTRY_HEIGHT, selected ? 0x88777777 : 0x44555555);
             } else if (selected) {
                 graphics.fill(left + 1, y, right - 1, y + ENTRY_HEIGHT, 0x66555555);
             }
-            graphics.drawString(this.font, selected ? "[x]" : "[ ]", left + 6, y + 6, selected ? 0xFFFFFF : 0xAAAAAA);
-            String enchantmentName = Component.translatable(enchantment.getDescriptionId()).getString();
-            graphics.drawString(this.font, this.font.plainSubstrByWidth(enchantmentName, right - left - 112), left + 30, y + 6, 0xFFFFFF);
+            graphics.text(this.font, selected ? "[x]" : "[ ]", left + 6, y + 6, selected ? 0xFFFFFF : 0xAAAAAA);
+            String enchantmentName = enchantment.value().description().getString();
+            graphics.text(this.font, this.font.plainSubstrByWidth(enchantmentName, right - left - 112), left + 30, y + 6, 0xFFFFFF);
             String level = selected ? Integer.toString(selectedEnchantments.get(enchantment)) : "-";
-            String levelText = selected ? level + "/" + enchantment.getMaxLevel() : level;
-            graphics.drawString(this.font, "-", right - 65, y + 6, selected ? 0xFFFFFF : 0x777777);
-            graphics.drawString(this.font, levelText, right - 48, y + 6, selected ? 0xFFFFFF : 0x777777);
-            graphics.drawString(this.font, "+", right - 20, y + 6, selected ? 0xFFFFFF : 0x777777);
+            String levelText = selected ? level + "/" + enchantment.value().getMaxLevel() : level;
+            graphics.text(this.font, "-", right - 65, y + 6, selected ? 0xFFFFFF : 0x777777);
+            graphics.text(this.font, levelText, right - 48, y + 6, selected ? 0xFFFFFF : 0x777777);
+            graphics.text(this.font, "+", right - 20, y + 6, selected ? 0xFFFFFF : 0x777777);
         }
-        graphics.disableScissor();
-        super.render(graphics, mouseX, mouseY, partialTick);
+        super.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        double mouseX = event.x();
+        double mouseY = event.y();
+        int button = event.button();
         if (button == 0 && mouseX >= 20 && mouseX < this.width - 20 && mouseY >= listY && mouseY < listY + listHeight) {
             int row = (int) ((mouseY - listY) / ENTRY_HEIGHT);
             int index = scrollOffset + row;
             if (row < listHeight / ENTRY_HEIGHT && index >= 0 && index < filteredEnchantments.size()) {
-                Enchantment enchantment = filteredEnchantments.get(index);
+                Holder<Enchantment> enchantment = filteredEnchantments.get(index);
                 int right = this.width - 20;
                 if (selectedEnchantments.containsKey(enchantment) && mouseX >= right - 68 && mouseX < right - 48) {
                     selectedEnchantments.computeIfPresent(enchantment, (key, level) -> Math.max(1, level - 1));
                 } else if (selectedEnchantments.containsKey(enchantment) && mouseX >= right - 24 && mouseX < right - 4) {
-                    selectedEnchantments.computeIfPresent(enchantment, (key, level) -> Math.min(key.getMaxLevel(), level + 1));
+                    selectedEnchantments.computeIfPresent(enchantment, (key, level) -> Math.min(key.value().getMaxLevel(), level + 1));
                 } else if (mouseX < right - 72) {
                     if (selectedEnchantments.containsKey(enchantment)) {
                         selectedEnchantments.remove(enchantment);
@@ -156,21 +160,21 @@ public class ItemSpawnerEnchantmentScreen extends Screen {
                 return true;
             }
         }
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalDelta, double verticalDelta) {
         if (mouseY >= listY && mouseY < listY + listHeight) {
-            scrollOffset = Mth.clamp(scrollOffset + (delta > 0 ? -3 : 3), 0, maxScroll);
+            scrollOffset = Mth.clamp(scrollOffset + (verticalDelta > 0 ? -3 : 3), 0, maxScroll);
             return true;
         }
-        return super.mouseScrolled(mouseX, mouseY, delta);
+        return super.mouseScrolled(mouseX, mouseY, horizontalDelta, verticalDelta);
     }
 
     @Override
     public void onClose() {
-        Minecraft.getInstance().setScreen(parent);
+        Minecraft.getInstance().setScreenAndShow(parent);
     }
 
     @Override

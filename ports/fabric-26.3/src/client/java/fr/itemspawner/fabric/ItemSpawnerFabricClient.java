@@ -4,11 +4,10 @@ import fr.itemspawner.ItemSpawnerScreen;
 import fr.itemspawner.ItemSpawnerNetwork;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
-import org.lwjgl.glfw.GLFW;
 
 public final class ItemSpawnerFabricClient implements ClientModInitializer {
     private static KeyMapping openMenu;
@@ -19,9 +18,9 @@ public final class ItemSpawnerFabricClient implements ClientModInitializer {
         KeyMapping.Category category = KeyMapping.Category.register(
                 Identifier.fromNamespaceAndPath("itemspawner", "main")
         );
-        openMenu = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+        openMenu = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.itemspawner.open",
-                GLFW.GLFW_KEY_K,
+            75,
                 category
         ));
 
